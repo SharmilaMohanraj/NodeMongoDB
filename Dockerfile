@@ -5,4 +5,4 @@ RUN npm install --omit=dev
 COPY src ./src
 EXPOSE 8000
 ENV PORT=8000
-CMD ["node", "src/server.js"]
+CMD ["npm", "start"]
