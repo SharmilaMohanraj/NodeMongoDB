@@ -1,0 +1,12 @@
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken');
+const { z } = require('zod');
+const { AppError, AuthenticationError, AuthorizationError, ValidationError } = require('./errors');
+const correlation = (req, res, next) => { req.correlationId = req.get('X-Correlation-ID') || req.get('X-Request-ID') || crypto.randomUUID(); res.set('X-Correlation-ID', req.correlationId); next(); };
+const validate = (schema, source = 'body') => (req, res, next) => { const parsed = schema.safeParse(req[source]); if (!parsed.success) return next(new ValidationError(parsed.error.issues.map((issue) => issue.message).join('; '))); req[source] = parsed.data; return next(); };
+const paginationSchema = z.object({ offset: z.coerce.number().int().min(0).default(0), limit: z.coerce.number().int().min(1).max(100).default(20) });
+const authenticate = (config) => (req, res, next) => { const header = req.get('Authorization'); if (!header?.startsWith('Bearer ')) return next(new AuthenticationError('Bearer token is required')); try { req.auth = jwt.verify(header.slice(7), config.jwtSecret); return next(); } catch (error) { return next(new AuthenticationError('Invalid or expired access token', { cause: error })); } };
+const authorize = (...roles) => (req, res, next) => roles.includes(req.auth?.role) ? next() : next(new AuthorizationError());
+const notFound = (req, res, next) => next(new AppError('NOT_FOUND', 'Route not found', 404));
+const errorHandler = (logger) => (error, req, res, next) => { const known = error instanceof AppError; const status = known ? error.status : 500; logger.error({ err: error, correlationId: req.correlationId, status }, 'Request failed'); res.status(status).json({ error: { code: known ? error.code : 'INTERNAL_ERROR', message: known ? error.message : 'An unexpected error occurred', timestamp: new Date().toISOString(), correlationId: req.correlationId } }); };
+module.exports = { correlation, validate, paginationSchema, authenticate, authorize, notFound, errorHandler };

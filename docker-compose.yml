@@ -1,0 +1,22 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB: hrdb
+      JWT_SECRET: development-only-change-me
+    depends_on:
+      mongo:
+        condition: service_healthy
+  mongo:
+    image: mongo:8.3.8
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
