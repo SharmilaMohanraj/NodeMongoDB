@@ -6,9 +6,9 @@
 | 2 Scaffold | Complete |
 | 3 Feature groups | Complete |
 | 4-14 Source/tests/docs | Complete |
-| 15 Boot/compose verification | Blocked: Docker daemon/compose unavailable |
-| 16 Reports | Complete |
-| 17 Delivery | Remediation code/tests complete; Docker daemon remains host-blocked |
+| 15 Boot/compose verification | Application HTTP boot verification complete; Docker Compose/Dockerfile checks blocked by unavailable daemon and missing Compose plugin |
+| 16 Reports | Complete: real booted-app request evidence regenerated |
+| 17 Delivery | Complete except externally blocked Docker runtime verification |
 
 ## Decisions
 - Node.js 20.18.1, Express 5/CommonJS, MongoDB native driver, Jest.
@@ -40,4 +40,10 @@
 ## Remediation status
 - Organizational remediation: added `tests/organizational.test.js` HTTP coverage with the project’s Mongo-shaped fake DB pattern. It verifies optional unassigned onboarding, rejection of nonexistent department/designation/manager references and non-manager manager references, and manager `/employees/subordinates` direct-report-only scoping (including descendant/cross-manager exclusion and non-manager denial). No organizational source defect was exposed by these tests. Jest execution could not be invoked from the available file-only agent tools; the added suite is ready for `npm test`.
 - Workforce remediation: added `tests/workforce.test.js` with an in-memory Mongo-compatible fake collection and authenticated HTTP coverage for attendance open-record conflicts/scopes, leave visibility/scopes, direct-manager-only one-time PENDING transitions, and HR leave-balance invariants. No workforce source defects were revealed by static review. Jest execution could not be invoked in this environment because no shell/process execution tool is available.
-- Compensation/report remediation: added canonical payroll input and persistence boundaries, period chronology checks, canonical payroll DTO serialization, and `tests/compensation.test.js` HTTP/service coverage for canonical/legacy/date validation plus HR-only attendance and leave-balance reports. Jest could not be invoked because this environment exposes file tools only; run `npm test -- --runInBand` to verify all suites.
+- Compensation/report remediation: added canonical payroll input and persistence boundaries, period chronology checks, canonical payroll DTO serialization, and `tests/compensation.test.js` HTTP/service coverage for canonical/legacy/date validation plus HR-only attendance and leave-balance reports.
+
+## Final remediation verification
+- Fixed Express 5 query validation by shadowing its getter-backed `req.query` with the parsed pagination object; report responses now return default `limit: 20` and `offset: 0`. The complete current Jest suite passed: 5 suites, 22 tests.
+- `GET /docs` is explicitly served at the exact path and returned HTTP 200 from a real booted Express app. `GET /openapi.json` also returned HTTP 200. Regenerated `tests-artifacts/test_results.json`, `api_test_report.xlsx`, and `project_report.docx` contain the observed results; `/docs` is no longer recorded as a 301 PASS.
+- OpenAPI now lists `/docs` and `/openapi.json` public operations and documents the implemented login payload as `accessToken`, `tokenType`, `expiresIn`, and `employee`.
+- Docker checks were genuinely attempted but remain externally blocked: `docker compose config` failed because this CLI has no Compose plugin; image pull and `docker info` failed because no Docker daemon is available. No Mongo/app containers or image were created. Evidence is recorded in `tests-artifacts/docker-verification.md`.

@@ -30,7 +30,7 @@ const spec = {
     schemas: {
       Error: { type: 'object', required: ['error'], properties: { error: { type: 'object', required: ['code', 'message', 'timestamp', 'correlationId'], properties: { code: { type: 'string' }, message: { type: 'string' }, timestamp: { type: 'string', format: 'date-time' }, correlationId: { type: 'string', format: 'uuid' } } } } },
       Login: { type: 'object', additionalProperties: false, required: ['email', 'password'], properties: { email: { type: 'string', format: 'email' }, password: { type: 'string', minLength: 1, maxLength: 200 } } },
-      Token: { type: 'object', required: ['token'], properties: { token: { type: 'string' } } },
+      LoginResponse: { type: 'object', required: ['accessToken', 'tokenType', 'expiresIn', 'employee'], properties: { accessToken: { type: 'string', description: 'Signed JWT access token' }, tokenType: { type: 'string', example: 'Bearer' }, expiresIn: { type: 'string', example: '30m' }, employee: ref('Employee') } },
       DepartmentInput: { type: 'object', additionalProperties: false, required: ['name'], properties: { name: { type: 'string', minLength: 1, maxLength: 160 }, description: { type: 'string', maxLength: 2000 } } },
       Department: { allOf: [ref('DepartmentInput'), { type: 'object', required: ['id'], properties: { id } }] },
       DepartmentPatch: { type: 'object', additionalProperties: false, minProperties: 1, properties: { name: { type: 'string', minLength: 1, maxLength: 160 }, description: { type: 'string', maxLength: 2000 } } },
@@ -56,7 +56,9 @@ const spec = {
   },
   paths: {
     '/health': { servers: [{ url: '/' }], get: { summary: 'Health check', responses: { 200: response('Healthy', { type: 'object', required: ['status'], properties: { status: { type: 'string', example: 'ok' } } }) } } },
-    '/auth/login': { post: { summary: 'Log in', requestBody: body(ref('Login')), responses: { ...dataResponse('Access token issued', ref('Token')), ...errorResponses } } },
+    '/docs': { servers: [{ url: '/' }], get: { summary: 'Swagger UI documentation', responses: { 200: response('Swagger UI HTML') } } },
+    '/openapi.json': { servers: [{ url: '/' }], get: { summary: 'OpenAPI specification', responses: { 200: response('OpenAPI 3.0 document', { type: 'object' }) } } },
+    '/auth/login': { post: { summary: 'Log in', requestBody: body(ref('Login')), responses: { ...dataResponse('Access token issued', ref('LoginResponse')), ...errorResponses } } },
     '/employees': { get: secured({ summary: 'List employees (HR)', parameters: pagination, responses: { 200: pageResponse(ref('Employee')), ...errorResponses } }), post: secured({ summary: 'Onboard employee (HR)', requestBody: body(ref('EmployeeInput')), responses: { ...dataResponse('Employee created', ref('Employee'), 201), ...errorResponses } }) },
     '/employees/subordinates': { get: secured({ summary: 'List direct subordinates (manager)', parameters: pagination, responses: { 200: pageResponse(ref('Employee')), ...errorResponses } }) },
     '/employees/{id}': { get: secured({ summary: 'Get employee', parameters: [idParameter], responses: { ...dataResponse('Employee', ref('Employee')), ...errorResponses } }), patch: secured({ summary: 'Update employee (HR)', parameters: [idParameter], requestBody: body(ref('EmployeePatch')), responses: { ...dataResponse('Employee updated', ref('Employee')), ...errorResponses } }) },

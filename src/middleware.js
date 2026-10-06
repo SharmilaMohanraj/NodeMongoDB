@@ -3,7 +3,15 @@ const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const { AppError, AuthenticationError, AuthorizationError, ValidationError } = require('./errors');
 const correlation = (req, res, next) => { req.correlationId = req.get('X-Correlation-ID') || req.get('X-Request-ID') || crypto.randomUUID(); res.set('X-Correlation-ID', req.correlationId); next(); };
-const validate = (schema, source = 'body') => (req, res, next) => { const parsed = schema.safeParse(req[source]); if (!parsed.success) return next(new ValidationError(parsed.error.issues.map((issue) => issue.message).join('; '))); req[source] = parsed.data; return next(); };
+const validate = (schema, source = 'body') => (req, res, next) => {
+  const parsed = schema.safeParse(req[source]);
+  if (!parsed.success) return next(new ValidationError(parsed.error.issues.map((issue) => issue.message).join('; ')));
+  // In Express 5, req.query is getter-backed. Shadow it with the parsed value so
+  // controllers and repositories receive coerced pagination defaults as well.
+  if (source === 'query') Object.defineProperty(req, 'query', { value: parsed.data, configurable: true });
+  else req[source] = parsed.data;
+  return next();
+};
 const paginationSchema = z.object({ offset: z.coerce.number().int().min(0).default(0), limit: z.coerce.number().int().min(1).max(100).default(20) });
 const authenticate = (config) => (req, res, next) => { const header = req.get('Authorization'); if (!header?.startsWith('Bearer ')) return next(new AuthenticationError('Bearer token is required')); try { req.auth = jwt.verify(header.slice(7), config.jwtSecret); return next(); } catch (error) { return next(new AuthenticationError('Invalid or expired access token', { cause: error })); } };
 const authorize = (...roles) => (req, res, next) => roles.includes(req.auth?.role) ? next() : next(new AuthorizationError());
