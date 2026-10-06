@@ -33,7 +33,7 @@
 
 ## Remediation results
 - Payroll uses only `periodStart`, `periodEnd`, and `amount` across route validation, service logic, repository whitelist, DTO, OpenAPI, and compensation tests.
-- `/docs` now has an exact-path Swagger handler (HTTP 200); the OpenAPI document was rebuilt with endpoint-specific request/response models, pagination/error envelopes, and required parameterized-path parameters. Deployment test expects 200.
+- `/docs` now has an exact-path Swagger handler (HTTP 200); the OpenAPI document was rebuilt with endpoint-specific create/patch request models, response models, pagination/error envelopes, and required parameterized-path parameters. Deployment test expects 200.
 - Added organizational, workforce, and compensation Jest suites (onboarding/hierarchy, attendance/leaves/balances, payroll/report authorization). The test runtime could not be invoked because `/outputs` is not host-mounted and Docker cannot start; existing run is not represented as a new pass.
 - Docker retry evidence is `tests-artifacts/docker-verification.md`: image pulls failed without a daemon; installing Docker then starting the service failed on sandbox cgroup permissions. No compose/app containers or images were created, so cleanup was not needed. Required Docker/Compose verification remains blocked by host permissions.
 
