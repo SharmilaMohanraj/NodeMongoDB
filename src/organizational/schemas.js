@@ -8,8 +8,8 @@ const employeeFields = {
   email: z.string().trim().email().max(320),
   password: z.string().min(8).max(128),
   role: z.enum(['HR', 'MANAGER', 'EMPLOYEE']).default('EMPLOYEE'),
-  departmentId: id,
-  designationId: id,
+  departmentId: optionalId,
+  designationId: optionalId,
   managerId: optionalId,
 };
 const employeeCreateSchema = z.object(employeeFields).strict();
@@ -19,13 +19,13 @@ const employeeUpdateSchema = z.object({
   email: employeeFields.email.optional(),
   password: employeeFields.password.optional(),
   role: z.enum(['HR', 'MANAGER', 'EMPLOYEE']).optional(),
-  departmentId: id.optional(),
-  designationId: id.optional(),
+  departmentId: optionalId.optional(),
+  designationId: optionalId.optional(),
   managerId: optionalId.optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
 const idParamsSchema = z.object({ id }).strict();
 const departmentCreateSchema = z.object({ name: z.string().trim().min(1).max(150), description: z.string().trim().max(1000).optional() }).strict();
 const departmentUpdateSchema = departmentCreateSchema.partial().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
-const designationCreateSchema = z.object({ name: z.string().trim().min(1).max(150), description: z.string().trim().max(1000).optional() }).strict();
+const designationCreateSchema = z.object({ name: z.string().trim().min(1).max(150), departmentId: optionalId, description: z.string().trim().max(1000).optional() }).strict();
 const designationUpdateSchema = designationCreateSchema.partial().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
 module.exports = { employeeCreateSchema, employeeUpdateSchema, departmentCreateSchema, departmentUpdateSchema, designationCreateSchema, designationUpdateSchema, idParamsSchema };

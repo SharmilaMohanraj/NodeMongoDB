@@ -19,6 +19,6 @@
 
 ## Unit updates
 - Organizational, workforce, and compensation/reporting groups complete.
-- `npm install` and Jest passed (2 suites, 7 tests). Live fake-DB HTTP report checks passed.
+- `npm install` and Jest passed (2 suites, 7 tests); post-test reference/nullability corrections applied for optional org assignments and designation department validation. Live fake-DB HTTP report checks passed.
 - Docker availability checks failed: daemon unavailable and the host Docker CLI has no compose subcommand. Dockerfile build/run and requested compose up/down/smoke could not run.
 - Reports: `tests-artifacts/api_test_report.xlsx` and `tests-artifacts/project_report.docx`.

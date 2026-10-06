@@ -14,8 +14,8 @@ class EmployeeService {
     this.designations = designationRepository || new DesignationRepository(db);
   }
   async validateReferences(values, employeeId) {
-    if (values.departmentId !== undefined && !await this.departments.findById(values.departmentId)) throw new ValidationError('Department does not exist');
-    if (values.designationId !== undefined && !await this.designations.findById(values.designationId)) throw new ValidationError('Designation does not exist');
+    if (values.departmentId) { if (!await this.departments.findById(values.departmentId)) throw new ValidationError('Department does not exist'); }
+    if (values.designationId) { if (!await this.designations.findById(values.designationId)) throw new ValidationError('Designation does not exist'); }
     if (values.managerId) {
       if (employeeId && values.managerId === employeeId) throw new ValidationError('An employee cannot be their own manager');
       const manager = await this.employees.findById(values.managerId);
@@ -56,5 +56,10 @@ class CatalogService {
   async remove(id) { const result = await this.repository.remove(id); if (!result.deletedCount) throw new NotFoundError('Resource not found'); }
 }
 class DepartmentService extends CatalogService { constructor(options = {}) { super({ ...options, Repository: DepartmentRepository }); } }
-class DesignationService extends CatalogService { constructor(options = {}) { super({ ...options, Repository: DesignationRepository }); } }
+class DesignationService extends CatalogService {
+  constructor(options = {}) { super({ ...options, Repository: DesignationRepository }); this.departments = options.departmentRepository || new DepartmentRepository(options.db); }
+  async validateDepartment(values) { if (values.departmentId && !await this.departments.findById(values.departmentId)) throw new ValidationError('Department does not exist'); }
+  async create(values) { await this.validateDepartment(values); const data = { ...values, departmentId: values.departmentId ? BaseRepository.objectId(values.departmentId) : null }; return super.create(data); }
+  async update(id, values) { await this.validateDepartment(values); const data = { ...values }; if (data.departmentId !== undefined) data.departmentId = data.departmentId ? BaseRepository.objectId(data.departmentId) : null; return super.update(id, data); }
+}
 module.exports = { EmployeeService, DepartmentService, DesignationService };
