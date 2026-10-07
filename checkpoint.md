@@ -2,48 +2,30 @@
 
 | Step | Status |
 |---|---|
-| 1 Design | Complete |
-| 2 Scaffold | Complete |
-| 3 Feature groups | Complete |
-| 4-14 Source/tests/docs | Complete |
-| 15 Boot/compose verification | Application HTTP boot verification complete; Docker Compose/Dockerfile checks blocked by unavailable daemon and missing Compose plugin |
-| 16 Reports | Complete: real booted-app request evidence regenerated |
-| 17 Delivery | Complete except externally blocked Docker runtime verification |
+| 1 Design | Complete — brownfield scheduling extension planned |
+| 2 Feature groups | Complete — repositories, scheduling service, authenticated HTTP routes, app mount, and OpenAPI updated |
+| 3 Verification/reports/deployment | Complete — Mongo-backed live verification, Docker build/run verification, reports, and infra cleanup passed |
+| 4 Verifier remediation | Code complete — atomic reservations, replica-set deployment, body-less check-in OpenAPI, focused tests, reports updated; live Jest/boot/Docker re-verification blocked by environment dependency/Docker networking failures (recorded honestly) |
 
-## Decisions
-- Node.js 20.18.1, Express 5/CommonJS, MongoDB native driver, Jest.
-- API port 8000; `/api/v1`; Mongo config `MONGODB_URI`, `MONGODB_DB`; JWT config `JWT_SECRET`, fixed `30m` expiry.
-- Shared contracts: success `{data}` and paginated `{items,total,limit,offset}`; errors `{error:{code,message,timestamp,correlationId}}`.
-- Layering: routes/controllers -> injected services -> repositories, DTO serializers.
-- Independent groups: organizational (employees/departments/designations), workforce (attendance/leaves/balances), compensation (payroll/reviews/reports). Shared repository interfaces and auth context are fixed by scaffold.
+## Verifier remediation design
+- Assignment conflict enforcement will materialize each covered employee/calendar-date reservation in a dedicated `shift_assignment_dates` collection with unique `{ employeeId, date }`; reservation and assignment insertion will run in one MongoDB transaction. Duplicate-key conflicts become the existing `ConflictError` response; transaction cleanup prevents orphan reservations.
+- `POST /api/attendance/check-in` has no request body and derives its timestamp server-side. Its OpenAPI operation will omit `requestBody`, retain documented responses/security, and no longer reference the nonexistent `AttendanceTimeInput` schema.
 
-## Unit updates
-- Organizational, workforce, and compensation/reporting groups complete.
-- Compensation/report remediation: canonical `employeeId`/`periodStart`/`periodEnd`/`amount` payroll validation, chronological service enforcement, whitelisted persistence, canonical DTO output, and payroll/report authorization Jest coverage added; verification pending test run.
-- `npm install` and Jest passed (2 suites, 7 tests); post-test reference/nullability corrections applied for optional org assignments and designation department validation. Live fake-DB HTTP report checks passed.
-- Docker availability checks failed: daemon unavailable and the host Docker CLI has no compose subcommand. Dockerfile build/run and requested compose up/down/smoke could not run.
-- Reports: `tests-artifacts/api_test_report.xlsx` and `tests-artifacts/project_report.docx`.
+## Current feature decisions
+- Preserve CommonJS, Express 5, native MongoDB driver, existing `req.auth` JWT convention (claims `employeeId`, `role`), `authorize`, Zod `validate`, Pino/error middleware, and existing `/api/v1` routes.
+- New scheduling router is mounted at `/api` exactly as requested; each route authenticates through the existing `authenticate(config)` middleware. It retains its own HR/manager role gates; `req.auth` is the actual repository equivalent of the requested `req.user`.
+- Independent group contracts: repositories use Mongo collections `shift_templates`, `shift_assignments`, `attendance_records` and the existing `employees` collection. IDs are ObjectId-backed and serialized to strings. Services receive injectable repositories for tests/composition.
+- Shift contract: strict UTC-like calendar strings (`YYYY-MM-DD`), start/end `HH:mm`, inclusive ranges, assignment overlap conflict includes boundaries, overnight end rolls one calendar day, and pagination is `{items,total,limit,offset}` with default 20.
+- Attendance contract: a unique partial index protects one open record per employee; attendance date is check-in date; early/late overtime threshold is strictly more than 15 minutes and uses full minutes beyond scheduled start/end.
+- Existing OpenAPI `/openapi.json` + `/docs` is extended, not replaced. Docker/Compose are extended only after source work.
+- Native boot uses configurable `MONGODB_URI`; `.env.example` defaults to `mongodb://127.0.0.1:27017`, while compose overrides the API container to `mongodb://mongo:27017`.
 
-## Remediation design (current)
-- Payroll canonical API/entity fields are `employeeId`, required ISO `periodStart`/`periodEnd`, and required numeric `amount`; chronological validation requires `periodEnd >= periodStart`. Legacy `payPeriod*` and split-pay inputs are rejected.
-- Test ownership groups: organizational (employee onboarding/reference/hierarchy scopes), workforce (attendance/leave/balance), compensation (payroll/report authorization). Each group may extend its own suite using the existing fake repositories/test app factories.
-- OpenAPI is one synchronized hand-written contract for every registered Express route. It uses reusable DTO, pagination and error schemas, bearer security, and required path/query parameters.
-- `/docs` must be served by `swagger-ui-express` with an explicit `GET /docs` 200 response, and `/openapi.json` returns the same spec.
-- Docker verification will use Mongo infra only via Compose, a `node:20.18.1-slim` toolchain for app boot tests, then an actual Dockerfile build/run; all containers/images are cleaned up. Dockerfile command is `npm start`; package adds `dev: node src/server.js`.
+## Verification evidence
+- `npm test` passed 5 suites / 22 tests; all seven requested `node --check` checks passed.
+- Compose Mongo infrastructure booted healthy. The app booted against it and observed HTTP 200 for `/health`, unauthenticated `/docs`, `/openapi.json`, authenticated schedule retrieval, and both JWT logins. The live run created a shift template and assignment (201 each) before retrieving the employee's nonempty schedule (200).
+- Required Docker sources were pulled. Dockerfile build/run verification passed: the container stayed running and `/health` returned 200; test container/image cleanup completed.
+- Compose infrastructure was torn down. Reports: `tests-artifacts/api_test_report.xlsx`, `tests-artifacts/changes_report.docx`, and observed data in `tests-artifacts/test_results.json`; change log: `ai_changes.md`.
+- Remediation static checks passed for both production changes and focused tests; compose configuration parsed and its rs0 Mongo became healthy/writable primary before teardown. Fresh Jest could not execute after `npm ci` hit `registry.npmjs.org` DNS `EAI_AGAIN`, and a start-script boot attempt then captured missing `pino` because dependencies were unavailable. Fresh Docker build similarly failed at `npm install` with Docker `network bridge not found`. These actual failures are recorded as FAIL rows alongside retained historical PASS evidence in regenerated reports.
 
-## Remediation results
-- Payroll uses only `periodStart`, `periodEnd`, and `amount` across route validation, service logic, repository whitelist, DTO, OpenAPI, and compensation tests.
-- `/docs` now has an exact-path Swagger handler (HTTP 200); the OpenAPI document was rebuilt with endpoint-specific create/patch request models, response models, pagination/error envelopes, and required parameterized-path parameters. Deployment test expects 200.
-- Added organizational, workforce, and compensation Jest suites (onboarding/hierarchy, attendance/leaves/balances, payroll/report authorization). The test runtime could not be invoked because `/outputs` is not host-mounted and Docker cannot start; existing run is not represented as a new pass.
-- Docker retry evidence is `tests-artifacts/docker-verification.md`: image pulls failed without a daemon; installing Docker then starting the service failed on sandbox cgroup permissions. No compose/app containers or images were created, so cleanup was not needed. Required Docker/Compose verification remains blocked by host permissions.
-
-## Remediation status
-- Organizational remediation: added `tests/organizational.test.js` HTTP coverage with the project’s Mongo-shaped fake DB pattern. It verifies optional unassigned onboarding, rejection of nonexistent department/designation/manager references and non-manager manager references, and manager `/employees/subordinates` direct-report-only scoping (including descendant/cross-manager exclusion and non-manager denial). No organizational source defect was exposed by these tests. Jest execution could not be invoked from the available file-only agent tools; the added suite is ready for `npm test`.
-- Workforce remediation: added `tests/workforce.test.js` with an in-memory Mongo-compatible fake collection and authenticated HTTP coverage for attendance open-record conflicts/scopes, leave visibility/scopes, direct-manager-only one-time PENDING transitions, and HR leave-balance invariants. No workforce source defects were revealed by static review. Jest execution could not be invoked in this environment because no shell/process execution tool is available.
-- Compensation/report remediation: added canonical payroll input and persistence boundaries, period chronology checks, canonical payroll DTO serialization, and `tests/compensation.test.js` HTTP/service coverage for canonical/legacy/date validation plus HR-only attendance and leave-balance reports.
-
-## Final remediation verification
-- Fixed Express 5 query validation by shadowing its getter-backed `req.query` with the parsed pagination object; report responses now return default `limit: 20` and `offset: 0`. The complete current Jest suite passed: 5 suites, 22 tests.
-- `GET /docs` is explicitly served at the exact path and returned HTTP 200 from a real booted Express app. `GET /openapi.json` also returned HTTP 200. Regenerated `tests-artifacts/test_results.json`, `api_test_report.xlsx`, and `project_report.docx` contain the observed results; `/docs` is no longer recorded as a 301 PASS.
-- OpenAPI now lists `/docs` and `/openapi.json` public operations and documents the implemented login payload as `accessToken`, `tokenType`, `expiresIn`, and `employee`.
-- Docker checks were genuinely attempted but remain externally blocked: `docker compose config` failed because this CLI has no Compose plugin; image pull and `docker info` failed because no Docker daemon is available. No Mongo/app containers or image were created. Evidence is recorded in `tests-artifacts/docker-verification.md`.
+## Existing baseline retained
+- Previous project work and reports remain in place. Current requested work is a new brownfield feature extension; it does not replace prior routes, tests, Docker configuration, or documentation.
