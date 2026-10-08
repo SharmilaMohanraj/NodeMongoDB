@@ -80,4 +80,34 @@ const spec = {
     '/reports/leave-balances': { get: secured({ summary: 'Leave balance report (HR)', parameters: pagination, responses: { 200: pageResponse(ref('LeaveBalance')), ...errorResponses } }) },
   },
 };
+
+// --- Shift scheduling & overtime (mounted at /api, not /api/v1; success bodies are bare resources) ---
+// Keys carry the full /api prefix (and a root server) so they cannot collide with the legacy /api/v1 attendance paths.
+const shiftServers = [{ url: '/', description: 'Server root' }];
+const timeStr = { type: 'string', pattern: '^([01]\\d|2[0-3]):[0-5]\\d$', example: '09:00' };
+const dateTime = { type: 'string', format: 'date-time' };
+const shiftSchemas = {
+  ShiftTemplateInput: { type: 'object', additionalProperties: false, required: ['name', 'startTime', 'endTime', 'applicableDays'], properties: { name: { type: 'string', minLength: 1, maxLength: 100 }, startTime: timeStr, endTime: { ...timeStr, example: '17:00', description: 'endTime <= startTime denotes an overnight shift ending the next calendar day' }, applicableDays: { type: 'array', minItems: 1, items: { type: 'integer', minimum: 0, maximum: 6 }, description: '0 = Sunday ... 6 = Saturday' } } },
+  ShiftTemplate: { type: 'object', required: ['id', 'name', 'startTime', 'endTime', 'applicableDays', 'createdAt'], properties: { id, name: { type: 'string' }, startTime: timeStr, endTime: timeStr, applicableDays: { type: 'array', items: { type: 'integer', minimum: 0, maximum: 6 } }, createdAt: dateTime } },
+  ShiftAssignmentInput: { type: 'object', additionalProperties: false, required: ['employeeId', 'shiftTemplateId', 'startDate', 'endDate'], properties: { employeeId: id, shiftTemplateId: id, startDate: date, endDate: date } },
+  ShiftAssignment: { type: 'object', required: ['id', 'employeeId', 'shiftTemplateId', 'startDate', 'endDate', 'assignedBy', 'createdAt'], properties: { id, employeeId: id, shiftTemplateId: id, startDate: date, endDate: date, assignedBy: id, createdAt: dateTime } },
+  ShiftRow: { type: 'object', required: ['employeeId', 'assignmentId', 'templateId', 'date', 'scheduledStartAt', 'scheduledEndAt'], properties: { employeeId: id, assignmentId: id, templateId: id, date, scheduledStartAt: dateTime, scheduledEndAt: dateTime } },
+  AttendanceRecord: { type: 'object', required: ['id', 'employeeId', 'attendanceDate', 'shiftAssignmentId', 'checkInAt', 'checkOutAt', 'unscheduled', 'overtimeFlagged', 'earlyOvertimeMinutes', 'lateOvertimeMinutes', 'overtimeMinutes'], properties: { id, employeeId: id, attendanceDate: date, shiftAssignmentId: { ...id, nullable: true }, checkInAt: dateTime, checkOutAt: { ...dateTime, nullable: true }, unscheduled: { type: 'boolean' }, overtimeFlagged: { type: 'boolean' }, earlyOvertimeMinutes: { type: 'integer' }, lateOvertimeMinutes: { type: 'integer' }, overtimeMinutes: { type: 'integer' } } },
+  MonthlyOvertimeRow: { type: 'object', required: ['employeeId', 'overtimeMinutes', 'overtimeHours'], properties: { employeeId: id, overtimeMinutes: { type: 'integer' }, overtimeHours: { type: 'number', description: 'overtimeMinutes / 60 rounded to 2 decimals' } } },
+};
+const bare = (description, schema, status = 200) => ({ [status]: response(description, schema) });
+const conflict = { 409: response('Conflict', ref('Error')) };
+const dateQuery = (name) => ({ name, in: 'query', required: true, schema: date });
+const shiftPaths = {
+  '/api/shift-templates': { servers: shiftServers, post: secured({ summary: 'Create shift template (HR)', requestBody: body(ref('ShiftTemplateInput')), responses: { ...bare('Shift template created', ref('ShiftTemplate'), 201), ...errorResponses, ...conflict } }), get: secured({ summary: 'List shift templates (HR)', parameters: pagination, responses: { 200: pageResponse(ref('ShiftTemplate')), ...errorResponses } }) },
+  '/api/shift-assignments': { servers: shiftServers, post: secured({ summary: 'Assign a shift template to an employee over an inclusive date range (HR)', requestBody: body(ref('ShiftAssignmentInput')), responses: { ...bare('Shift assignment created', ref('ShiftAssignment'), 201), ...errorResponses, ...conflict } }) },
+  '/api/shifts/me': { servers: shiftServers, get: secured({ summary: 'My shifts for today through the next 13 days (EMPLOYEE)', parameters: pagination, responses: { 200: pageResponse(ref('ShiftRow')), ...errorResponses } }) },
+  '/api/shifts/team': { servers: shiftServers, get: secured({ summary: 'Team shifts over an inclusive date range (MANAGER)', parameters: [dateQuery('from'), dateQuery('to'), ...pagination], responses: { 200: pageResponse(ref('ShiftRow')), ...errorResponses } }) },
+  '/api/attendance/check-in': { servers: shiftServers, post: secured({ summary: 'Check in (EMPLOYEE)', responses: { ...bare('Attendance record opened', ref('AttendanceRecord'), 201), ...errorResponses, ...conflict } }) },
+  '/api/attendance/check-out': { servers: shiftServers, patch: secured({ summary: 'Check out (EMPLOYEE)', responses: { ...bare('Attendance record closed', ref('AttendanceRecord')), ...errorResponses } }) },
+  '/api/attendance/{attendanceId}/unscheduled': { servers: shiftServers, patch: secured({ summary: 'Flag a team member attendance record as unscheduled (MANAGER)', parameters: [{ name: 'attendanceId', in: 'path', required: true, schema: id }], responses: { ...bare('Attendance record updated', ref('AttendanceRecord')), ...errorResponses } }) },
+  '/api/overtime-reports/monthly': { servers: shiftServers, get: secured({ summary: 'Monthly overtime per employee (HR)', parameters: [{ name: 'month', in: 'query', required: true, schema: { type: 'string', pattern: '^\\d{4}-(0[1-9]|1[0-2])$', example: '2026-01' } }, ...pagination], responses: { 200: pageResponse(ref('MonthlyOvertimeRow')), ...errorResponses } }) },
+};
+Object.assign(spec.components.schemas, shiftSchemas);
+Object.assign(spec.paths, shiftPaths);
 module.exports = { spec };

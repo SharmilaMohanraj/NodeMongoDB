@@ -7,12 +7,21 @@ services:
       PORT: "8000"
       MONGODB_URI: mongodb://mongo:27017
       MONGODB_DB: hrdb
-      JWT_SECRET: development-only-change-me
+      # Dev-only default so `docker compose up -d --build --wait` works with no setup.
+      # Override with JWT_SECRET in the environment or a .env file for real deployments.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-jwt-secret-change-me}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
     depends_on:
       mongo:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
   mongo:
-    image: mongo:8.3.8
+    image: mongo:8.0
     ports:
       - "27017:27017"
     healthcheck:
